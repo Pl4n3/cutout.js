@@ -1,0 +1,340 @@
+<html><head>
+<style>
+html, body {
+  border: 0;
+  margin: 0;
+  height: 100%;
+  height: 100%;
+}
+</style>
+<meta http-equiv="content-type" content="text/html; charset=windows-1252">
+<script src="../vecmath.js"></script>
+<script id="shader-fs" type="x-shader/x-fragment">
+precision mediump float;
+varying vec2 vTextureCoord;
+uniform sampler2D uSampler;
+void main(void) {
+  gl_FragColor = texture2D(uSampler, vec2(vTextureCoord.s, vTextureCoord.t));
+}
+</script>
+<script id="shader-vs" type="x-shader/x-vertex">
+attribute vec3 aVertexPosition;
+attribute vec2 aTextureCoord;
+uniform mat4 uMVMatrix;
+uniform mat4 uPMatrix;
+varying vec2 vTextureCoord;
+void main(void) {
+  gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+  vTextureCoord = aTextureCoord;
+}
+</script>
+<script type="text/javascript">
+var gl,shaderProgram,textures = Array(),pMatrix,rot=0,filter=2;
+//var cubeVertexPositionBuffer,cubeVertexTextureCoordBuffer,cubeVertexIndexBuffer;    
+var m0=new Vecmath.Mat4(),m1=new Vecmath.Mat4(),m0a=new Float32Array(16);//,mvm1=new Vecmath.Mat4();
+var canvas,cont,ot,tg=0,fpst=0,fpsc=0,fpsdiv,blenda,seg0,seg1,seg2;
+function getShader(gl, id) {
+  var shaderScript = document.getElementById(id);
+  if (!shaderScript) {
+      return null;
+  }
+  
+  var str = "";
+  var k = shaderScript.firstChild;
+  while (k) {
+      if (k.nodeType == 3) {
+          str += k.textContent;
+      }
+      k = k.nextSibling;
+  }
+  
+  var shader;
+  if (shaderScript.type == "x-shader/x-fragment") {
+      shader = gl.createShader(gl.FRAGMENT_SHADER);
+  } else if (shaderScript.type == "x-shader/x-vertex") {
+      shader = gl.createShader(gl.VERTEX_SHADER);
+  } else {
+      return null;
+  }
+  
+  gl.shaderSource(shader, str);
+  gl.compileShader(shader);
+  
+  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+      alert(gl.getShaderInfoLog(shader));
+      return null;
+  }
+  
+  return shader;
+}
+function makPerspective(fovy, aspect, znear, zfar) {
+  var ymax = znear * Math.tan(fovy * Math.PI / 360.0);
+  var ymin = -ymax;
+  var xmin = ymin * aspect;
+  var xmax = ymax * aspect;
+  return makFrustum(xmin, xmax, ymin, ymax, znear, zfar);
+}
+function makFrustum(left,right,bottom,top,znear,zfar) {
+  var X = 2*znear/(right-left);
+  var Y = 2*znear/(top-bottom);
+  var A = (right+left)/(right-left);
+  var B = (top+bottom)/(top-bottom);
+  var C = -(zfar+znear)/(zfar-znear);
+  var D = -2*zfar*znear/(zfar-znear);
+  return [X,0,0,0,0,Y,0,0,A,B,C,-1,0,0,D,0];
+}
+function perspective(fovy, aspect, znear, zfar) {
+  pMatrix = makPerspective(fovy, aspect, znear, zfar);
+}
+function drawSeg(s,d) {
+  //m0.setIdentity();
+  m1.setIdentity();m1.setTranslation3(s.x,s.y,s.z);m0.mul1(m1);
+  m1.rotZ(Math.sin(0.002*tg*d)*0.2);m0.mul1(m1);
+  m0.toArray(m0a);
+  
+  
+  gl.bindBuffer(gl.ARRAY_BUFFER, s.vertexPositionBuffer);
+  gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, s.vertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
+  
+  gl.bindBuffer(gl.ARRAY_BUFFER, s.vertexTextureCoordBuffer);
+  gl.vertexAttribPointer(shaderProgram.textureCoordAttribute, s.vertexTextureCoordBuffer.itemSize, gl.FLOAT, false, 0, 0);
+  
+  
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, textures[filter]);
+  gl.uniform1i(shaderProgram.samplerUniform, 0);
+  
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, s.vertexIndexBuffer);
+  
+  gl.uniformMatrix4fv(shaderProgram.pMatrixUniform, false, new Float32Array(pMatrix));// pMatrix);
+  gl.uniformMatrix4fv(shaderProgram.mvMatrixUniform, false, m0a);//mvMatrix);
+  
+  gl.drawElements(gl.TRIANGLES, s.vertexIndexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
+  
+  if (!s.segs) return;
+  
+  s.m.setM4(m0);
+  for (var h=0;h<s.segs.length;h++) {
+    if (h>0) m0.setM4(s.m);
+    drawSeg(s.segs[h],d+1);
+  }
+  
+}
+function tick() {
+  requestAnimFrame(tick);
+  var t=new Date().getTime();var dt=t-ot;ot=t;tg+=dt;
+  fpst+=dt;fpsc++;
+  if (fpst>1000) {
+    fpsdiv.innerHTML=Math.floor(fpsc*1000/fpst+0.5)+' fps';
+    fpst=0;fpsc=0;
+  }
+  
+  
+  if ((canvas.width!=cont.clientWidth)||(canvas.height!=cont.clientHeight)) {
+    canvas.width=cont.clientWidth;canvas.height=cont.clientHeight;
+  }  
+  
+  
+  
+  
+  gl.viewport(0,0,canvas.width,canvas.height);
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  
+  //mat4.perspective(45, gl.viewportWidth / gl.viewportHeight, 0.1, 100.0, pMatrix);
+  
+  perspective(45,canvas.width/canvas.height,0.1,100.0);
+  //perspective(45,gl.viewportWidth/gl.viewportHeight,0.1,100.0);
+  
+  /*
+  var l=blenda.length;
+  for (var y=0;y<l;y++) for (var x=0;x<l;x++) {
+    ////gl.blendFunc(gl.SRC_ALPHA, gl.SRC_COLOR);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    gl.blendFunc(blenda[x],blenda[y]);
+    m0.setIdentity();drawSeg(3*(x-(l-1)/2),3*(y-(l-1)/2),-20);drawSeg(-1,0,0.01);
+  }
+  */
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+  m0.setIdentity();m0.setTranslation3(0,1,-2.5);
+  drawSeg(seg0,1);
+  //drawSeg(seg1,2);
+  //drawSeg(seg2,3);
+  
+  //rot=Math.sin(0.001*tg)*0.5;
+  
+  //setTimeout(tick,1);
+}
+function initSeg(x,y,   x0,y0,x1,y1,   u0,v0,u1,v1) {
+  var s={x:x,y:y,z:0.001,m:new Vecmath.Mat4()};
+  s.vertexPositionBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, s.vertexPositionBuffer);
+  vertices = [
+      // Front face
+      x0, y0,  0.0,
+      x1, y0,  0.0,
+      x1, y1,  0.0,
+      x0, y1,  0.0,
+  ];
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+  s.vertexPositionBuffer.itemSize = 3;
+  s.vertexPositionBuffer.numItems = vertices.length/3;
+  
+  s.vertexTextureCoordBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, s.vertexTextureCoordBuffer);
+  var textureCoords = [ u0,v0, u1,v0, u1,v1, u0,v1 ];
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(textureCoords), gl.STATIC_DRAW);
+  s.vertexTextureCoordBuffer.itemSize = 2;
+  s.vertexTextureCoordBuffer.numItems = textureCoords.length/2;
+  
+  s.vertexIndexBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, s.vertexIndexBuffer);
+  var cubeVertexIndices = [
+      0, 1, 2,      0, 2, 3,    // Front face
+  ]
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(cubeVertexIndices), gl.STATIC_DRAW);
+  s.vertexIndexBuffer.itemSize = 1;
+  s.vertexIndexBuffer.numItems = cubeVertexIndices.length;
+  return s;
+}
+function initSeg0(xi,yi,w,h,x0,y0,x,y) {
+  var x00=2*x0/1024,y00=2*(h-y0)/1024;
+  return initSeg(
+    2*x/1024,-2*y/1024,
+    -x00,-y00,2*w/1024-x00,2*h/1024-y00, 
+    xi/1354,1-(yi+h)/1024,(xi+w)/1354,1-yi/1024);
+}
+function loaded() {
+  
+  
+  canvas=document.getElementById("canv");
+  fpsdiv=document.getElementById("fps");
+  cont=canvas.parentNode;
+  
+  try {
+      gl = canvas.getContext("experimental-webgl");
+      gl.viewportWidth = canvas.width;
+      gl.viewportHeight = canvas.height;
+  } catch (e) {
+  }
+  if (!gl) {
+      alert("Could not initialise WebGL, sorry :-(");
+  }
+  
+  //---initShaders
+  
+  var fragmentShader = getShader(gl, "shader-fs");
+  var vertexShader = getShader(gl, "shader-vs");
+  
+  shaderProgram = gl.createProgram();
+  gl.attachShader(shaderProgram, vertexShader);
+  gl.attachShader(shaderProgram, fragmentShader);
+  gl.linkProgram(shaderProgram);
+  
+  if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
+      alert("Could not initialise shaders");
+  }
+  
+  gl.useProgram(shaderProgram);
+  
+  shaderProgram.vertexPositionAttribute = gl.getAttribLocation(shaderProgram, "aVertexPosition");
+  gl.enableVertexAttribArray(shaderProgram.vertexPositionAttribute);
+  
+  shaderProgram.textureCoordAttribute = gl.getAttribLocation(shaderProgram, "aTextureCoord");
+  gl.enableVertexAttribArray(shaderProgram.textureCoordAttribute);
+  
+  shaderProgram.pMatrixUniform = gl.getUniformLocation(shaderProgram, "uPMatrix");
+  shaderProgram.mvMatrixUniform = gl.getUniformLocation(shaderProgram, "uMVMatrix");
+  shaderProgram.samplerUniform = gl.getUniformLocation(shaderProgram, "uSampler");
+  
+  //----initBuffers
+  //seg0=initSeg(0,0,     -0.661,-2,0.661,0,    0,0,0.5,1);
+  seg0=initSeg0(0,0,677,1024,338,0,0,0);
+  seg0.segs=[];var s1,s2;
+  seg0.segs.push(s1=initSeg0(698,441,639,579,315,500,340-338,890));
+  s1.segs=[];
+  s1.segs.push(initSeg0(687,9,  292,436,170,340,  24,-476));
+  s1.segs.push(s2=initSeg0(985,3,219,163,60,60,-240,-130));
+  s2.segs=[initSeg0(1023,207,224,180,40,40,113,26)];
+  //seg1=initSeg(-1,-1,  0,0,0.624*2,1.13,    698/1354,1-441/1024,(698+639)/1354,1-(441+579)/1024);
+  //var x0,y0;
+  //x0=2*315/1024;y0=2*(579-500)/1024;
+  //seg1=initSeg(2*2/1024,-2*890/1024,  -x0,-y0,2*639/1024-x0,2*579/1024-y0,    698/1354,1-(441+579)/1024,(698+639)/1354,1-441/1024);
+  //--seg1=initSeg0(698,441,639,579,315,500,340-338,890);
+  //x0=2*170/1024;y0=2*(436-340)/1024;
+  //seg2=initSeg(2*24/1024,2*476/1024,  -x0,-y0,2*292/1024-x0,2*436/1024-y0,    687/1354,1-(9+436)/1024,(687+292)/1354,1-9/1024);
+  //--seg2=initSeg0(687,9,  292,436,170,340,  24,-476);
+  //--seg2=initSeg0(985,3,219,163,60,60,-240,-130);
+  
+  //---initTexture
+  var crateImage = new Image();
+  for (var i=0; i < 3; i++) {
+      var texture = gl.createTexture();
+      texture.image = crateImage;
+      textures.push(texture);
+  }
+  crateImage.onload = function () {
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+    
+    gl.bindTexture(gl.TEXTURE_2D, textures[0]);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, textures[0].image);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    
+    gl.bindTexture(gl.TEXTURE_2D, textures[1]);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, textures[1].image);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    
+    gl.bindTexture(gl.TEXTURE_2D, textures[2]);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, textures[2].image);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_NEAREST);
+    gl.generateMipmap(gl.TEXTURE_2D);
+    
+    gl.bindTexture(gl.TEXTURE_2D, null);
+  }
+  crateImage.src = "paint/monalisaw.png";
+  
+  gl.clearColor(0.5,0.5,0.5,1.0);
+  gl.enable(gl.DEPTH_TEST);
+  
+  //gl.blendFunc(gl.ONE_MINUS_SRC_ALPHA,gl.SRC_COLOR);
+  //gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+  
+  blenda=[
+    gl.SRC_ALPHA, 
+    gl.ONE_MINUS_SRC_ALPHA,
+    gl.ONE,
+    gl.SRC_COLOR, 
+  ];
+  //gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+  gl.cullFace(gl.BACK);
+  gl.enable(gl.BLEND);
+  
+  
+  ot=new Date().getTime();
+  
+  
+  window.requestAnimFrame = (function(){
+    return  window.requestAnimationFrame       ||
+            window.webkitRequestAnimationFrame ||
+            window.mozRequestAnimationFrame    ||
+            function( callback ){
+              window.setTimeout(callback, 1000 / 60);
+            };
+  })();
+  
+  
+  tick();
+}
+</script>
+</head>
+<body onload="loaded();">
+<canvas id="canv" style="border: none;width:100%;height:100%;background:black;"></canvas>
+<div id="fps" style="position:absolute;top:2px;left:2px;font-size:1.5em;user-select:none;-moz-user-select:none;-webkit-user-select:none;">Initializing...</div>
+</body></html><script>
+//fr o,15
+//fr o,35
+//fr o,38
+//fr p,2,79
