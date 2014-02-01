@@ -24,6 +24,10 @@
 var Vecmath={};
 (function(Vecmath) {
   //--
+  function fs(f) {
+    return Math.floor(f*100+0.5)/100;
+  }
+  Vecmath.fs=fs;
   Vecmath.Vec3=function() {
     if (arguments.length==3) this.set3(arguments[0],arguments[1],arguments[2]);
   }
@@ -65,6 +69,10 @@ var Vecmath={};
   Vecmath.Vec3.prototype.length=function() {
     return Math.sqrt(this.lengthSquared());
   }
+  Vecmath.Vec3.prototype.distTo=function(v) {
+    var dx=this.x-v.x,dy=this.y-v.y,dz=this.z-v.z;
+    return Math.sqrt(dx*dx+dy*dy+dz*dz);
+  }
   Vecmath.Vec3.prototype.scale1=function(s) {
     this.x*=s;this.y*=s;this.z*=s;
   }
@@ -91,6 +99,12 @@ var Vecmath={};
     this.	y = t1.y + t2.y;
     this.	z = t1.z + t2.z;
   }
+  Vecmath.Vec3.prototype.bezier=function(t,p0,p1,p2,p3) {
+    var t1=1-t,t12=t1*t1,t13=t12*t1,f0=3*t*t12,t2=t*t,t3=t2*t,f1=3*t2*t1;
+    this.x=t13*p0.x + f0*p1.x + f1*p2.x + t3*p3.x; 
+    this.y=t13*p0.y + f0*p1.y + f1*p2.y + t3*p3.y; 
+    this.z=t13*p0.z + f0*p1.z + f1*p2.z + t3*p3.z; 
+  }
   Vecmath.Vec3.prototype.negate0=function() {
     this.x=-this.x;this.y=-this.y;this.z=-this.z;
   }
@@ -98,7 +112,7 @@ var Vecmath={};
     this.x=-t1.x;this.y=-t1.y;this.z=-t1.z;
   }
   Vecmath.Vec3.prototype.toString=function() {
-    return "V3["+this.x+","+this.y+","+this.z+"]";
+    return "V3["+fs(this.x)+","+fs(this.y)+","+fs(this.z)+"]";
   }
   Vecmath.Vec3.prototype.equals=function(v) {
     return (v!=null)&&(this.x==v.x)&&(this.y==v.y)&&(this.z==v.z);
@@ -533,13 +547,52 @@ var Vecmath={};
     //m[3]  = m[7] = m[11] = m[12] = m[13] = m[14] = 0;
     //m[15] = 1;
   }
+  
+  Vecmath.Mat4.prototype.quat4=function(x,y,z,w) {
+    var xx= x * x;
+    var xy= x * y;
+    var xz= x * z;
+    var xw= x * w;
+    var yy= y * y;
+    var yz= y * z;
+    var yw= y * w;
+    var zz= z * z;
+    var zw= z * w;
+    this.m00  = 1 - 2 * ( yy + zz );
+    this.m10  =     2 * ( xy - zw );
+    this.m20  =     2 * ( xz + yw );
+    this.m01  =     2 * ( xy + zw );
+    this.m11  = 1 - 2 * ( xx + zz );
+    this.m21  =     2 * ( yz - xw );
+    this.m02  =     2 * ( xz - yw );
+    this.m12  =     2 * ( yz + xw );
+    this.m22 = 1 - 2 * ( xx + yy );
+    this.m30  = this.m31 = this.m32 = this.m03 = this.m13 = this.m23 = 0;
+    this.m33 = 1;
+    //m[0]  = 1 - 2 * ( yy + zz );
+    //m[1]  =     2 * ( xy - zw );
+    //m[2]  =     2 * ( xz + yw );
+    //m[4]  =     2 * ( xy + zw );
+    //m[5]  = 1 - 2 * ( xx + zz );
+    //m[6]  =     2 * ( yz - xw );
+    //m[8]  =     2 * ( xz - yw );
+    //m[9]  =     2 * ( yz + xw );
+    //m[10] = 1 - 2 * ( xx + yy );
+    //m[3]  = m[7] = m[11] = m[12] = m[13] = m[14] = 0;
+    //m[15] = 1;
+  }
+  
+  
 }
 )(Vecmath);
 
 
 //fr o,24
-//fr o,24,16
-//fr o,24,29
-//fr o,24,65
-//fr o,24,68
-//fr p,41,0
+//fr o,24,13
+//fr o,24,14
+//fr o,24,15
+//fr o,24,26
+//fr o,24,33
+//fr o,24,69
+//fr o,24,72
+//fr p,14,27
